@@ -54,4 +54,17 @@ public class VerificationRequest {
         this.userId = userId;
         this.status = VerificationStatus.PENDING;
     }
+
+    public void approve(UUID reviewerId) {
+        this.status = VerificationStatus.APPROVED;
+        this.reviewerId = reviewerId;
+        this.dtReviewed = Instant.now();
+    }
+
+    public void reject(UUID reviewerId, String reason) {
+        this.status = VerificationStatus.REJECTED;
+        this.reviewerId = reviewerId;
+        this.rejectionReason = reason;
+        this.dtReviewed = Instant.now();
+    }
 }

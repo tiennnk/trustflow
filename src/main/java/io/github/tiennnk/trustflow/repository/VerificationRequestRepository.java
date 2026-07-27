@@ -13,4 +13,6 @@ public interface VerificationRequestRepository extends JpaRepository<Verificatio
     boolean existsByUserIdAndStatus(UUID userId, VerificationStatus status);
 
     List<VerificationRequest> findByUserIdOrderByDtSubmittedDesc(UUID userId);
+
+    List<VerificationRequest> findByStatusOrderByDtSubmittedAsc(VerificationStatus status);
 }
