@@ -3,6 +3,7 @@ package io.github.tiennnk.trustflow.service;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -13,6 +14,7 @@ import io.github.tiennnk.trustflow.dto.VerificationResponse;
 import io.github.tiennnk.trustflow.entity.AuditAction;
 import io.github.tiennnk.trustflow.entity.VerificationRequest;
 import io.github.tiennnk.trustflow.entity.VerificationStatus;
+import io.github.tiennnk.trustflow.event.VerificationEvent;
 import io.github.tiennnk.trustflow.exception.CustomException;
 import io.github.tiennnk.trustflow.repository.VerificationRequestRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +25,7 @@ public class VerificationService {
 
     private final VerificationRequestRepository verificationRequestRepository;
     private final AuditLogService auditLogService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public VerificationResponse submit(UUID userId) {
@@ -39,6 +42,7 @@ public class VerificationService {
         }
 
         auditLogService.record(request.getId(), userId, AuditAction.SUBMITTED, null);
+        eventPublisher.publishEvent(new VerificationEvent(request.getId(), userId, AuditAction.SUBMITTED, null));
 
         return toResponse(request);
     }
@@ -63,6 +67,7 @@ public class VerificationService {
         request.approve(reviewerId);
         VerificationResponse response = saveReviewed(request);
         auditLogService.record(requestId, reviewerId, AuditAction.APPROVED, null);
+        eventPublisher.publishEvent(new VerificationEvent(requestId, reviewerId, AuditAction.APPROVED, null));
         return response;
     }
 
@@ -72,6 +77,7 @@ public class VerificationService {
         request.reject(reviewerId, reason);
         VerificationResponse response = saveReviewed(request);
         auditLogService.record(requestId, reviewerId, AuditAction.REJECTED, reason);
+        eventPublisher.publishEvent(new VerificationEvent(requestId, reviewerId, AuditAction.REJECTED, reason));
         return response;
     }
 
