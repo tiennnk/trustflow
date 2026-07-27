@@ -1,0 +1,120 @@
+package io.github.tiennnk.trustflow.service;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+import java.util.Optional;
+import java.util.UUID;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+
+import io.github.tiennnk.trustflow.dto.VerificationResponse;
+import io.github.tiennnk.trustflow.entity.VerificationRequest;
+import io.github.tiennnk.trustflow.entity.VerificationStatus;
+import io.github.tiennnk.trustflow.exception.CustomException;
+import io.github.tiennnk.trustflow.repository.VerificationRequestRepository;
+
+@ExtendWith(MockitoExtension.class)
+class VerificationServiceTest {
+
+    @Mock
+    private VerificationRequestRepository verificationRequestRepository;
+
+    @InjectMocks
+    private VerificationService verificationService;
+
+    @Test
+    void submit_noPendingRequest_returnsPendingResponse() {
+        UUID userId = UUID.randomUUID();
+
+        when(verificationRequestRepository.existsByUserIdAndStatus(userId, VerificationStatus.PENDING))
+                .thenReturn(false);
+
+        VerificationResponse response = verificationService.submit(userId);
+
+        assertEquals(VerificationStatus.PENDING, response.status());
+        verify(verificationRequestRepository).saveAndFlush(any(VerificationRequest.class));
+    }
+
+    @Test
+    void submit_alreadyPending_throwsConflict() {
+        UUID userId = UUID.randomUUID();
+
+        when(verificationRequestRepository.existsByUserIdAndStatus(userId, VerificationStatus.PENDING))
+                .thenReturn(true);
+
+        CustomException exception = assertThrows(CustomException.class, () -> verificationService.submit(userId));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatus());
+        verify(verificationRequestRepository, never()).saveAndFlush(any(VerificationRequest.class));
+    }
+
+    @Test
+    void submit_raceCondition_throwsConflict() {
+        UUID userId = UUID.randomUUID();
+
+        when(verificationRequestRepository.existsByUserIdAndStatus(userId, VerificationStatus.PENDING))
+                .thenReturn(false);
+        when(verificationRequestRepository.saveAndFlush(any(VerificationRequest.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate"));
+
+        CustomException exception = assertThrows(CustomException.class, () -> verificationService.submit(userId));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatus());
+    }
+
+    @Test
+    void getDetail_owner_returnsResponse() {
+        UUID userId = UUID.randomUUID();
+        VerificationRequest request = new VerificationRequest(userId);
+
+        when(verificationRequestRepository.findById(any())).thenReturn(Optional.of(request));
+
+        VerificationResponse response = verificationService.getDetail(userId, UUID.randomUUID(), false);
+
+        assertEquals(VerificationStatus.PENDING, response.status());
+    }
+
+    @Test
+    void getDetail_notOwnerAndNotReviewer_throwsForbidden() {
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+        VerificationRequest request = new VerificationRequest(ownerId);
+
+        when(verificationRequestRepository.findById(any())).thenReturn(Optional.of(request));
+
+        CustomException exception = assertThrows(CustomException.class,
+                () -> verificationService.getDetail(requesterId, UUID.randomUUID(), false));
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
+    }
+
+    @Test
+    void getDetail_notOwnerButReviewer_returnsResponse() {
+        UUID ownerId = UUID.randomUUID();
+        UUID reviewerId = UUID.randomUUID();
+        VerificationRequest request = new VerificationRequest(ownerId);
+
+        when(verificationRequestRepository.findById(any())).thenReturn(Optional.of(request));
+
+        VerificationResponse response = verificationService.getDetail(reviewerId, UUID.randomUUID(), true);
+
+        assertEquals(VerificationStatus.PENDING, response.status());
+    }
+
+    @Test
+    void getDetail_notFound_throwsNotFound() {
+        when(verificationRequestRepository.findById(any())).thenReturn(Optional.empty());
+
+        CustomException exception = assertThrows(CustomException.class,
+                () -> verificationService.getDetail(UUID.randomUUID(), UUID.randomUUID(), false));
+
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatus());
+    }
+}
