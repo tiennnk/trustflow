@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.github.tiennnk.trustflow.dto.VerificationResponse;
+import io.github.tiennnk.trustflow.entity.AuditAction;
 import io.github.tiennnk.trustflow.entity.VerificationRequest;
 import io.github.tiennnk.trustflow.entity.VerificationStatus;
 import io.github.tiennnk.trustflow.exception.CustomException;
@@ -21,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 public class VerificationService {
 
     private final VerificationRequestRepository verificationRequestRepository;
+    private final AuditLogService auditLogService;
 
     @Transactional
     public VerificationResponse submit(UUID userId) {
@@ -35,6 +37,8 @@ public class VerificationService {
         } catch (DataIntegrityViolationException e) {
             throw new CustomException(HttpStatus.CONFLICT, "You already have a pending verification request!");
         }
+
+        auditLogService.record(request.getId(), userId, AuditAction.SUBMITTED, null);
 
         return toResponse(request);
     }
@@ -57,14 +61,18 @@ public class VerificationService {
     public VerificationResponse approve(UUID reviewerId, UUID requestId) {
         VerificationRequest request = getPendingOrThrow(requestId);
         request.approve(reviewerId);
-        return saveReviewed(request);
+        VerificationResponse response = saveReviewed(request);
+        auditLogService.record(requestId, reviewerId, AuditAction.APPROVED, null);
+        return response;
     }
 
     @Transactional
     public VerificationResponse reject(UUID reviewerId, UUID requestId, String reason) {
         VerificationRequest request = getPendingOrThrow(requestId);
         request.reject(reviewerId, reason);
-        return saveReviewed(request);
+        VerificationResponse response = saveReviewed(request);
+        auditLogService.record(requestId, reviewerId, AuditAction.REJECTED, reason);
+        return response;
     }
 
     public VerificationResponse getDetail(UUID userId, UUID requestId, boolean canViewAny) {
