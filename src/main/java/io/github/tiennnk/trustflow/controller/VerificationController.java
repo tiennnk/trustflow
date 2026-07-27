@@ -10,11 +10,15 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.github.tiennnk.trustflow.dto.RejectRequest;
 import io.github.tiennnk.trustflow.dto.VerificationResponse;
+import io.github.tiennnk.trustflow.exception.CustomException;
 import io.github.tiennnk.trustflow.service.VerificationService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -34,17 +38,52 @@ public class VerificationController {
         return ResponseEntity.ok(verificationService.getOwnRequests(userId));
     }
 
+    @GetMapping("/pending")
+    public ResponseEntity<List<VerificationResponse>> getPendingRequests(Authentication authentication) {
+        requireReviewer(authentication);
+        return ResponseEntity.ok(verificationService.getPendingRequests());
+    }
+
+    @PostMapping("/{id}/approve")
+    public ResponseEntity<VerificationResponse> approve(
+            @AuthenticationPrincipal UUID reviewerId,
+            Authentication authentication,
+            @PathVariable UUID id) {
+
+        requireReviewer(authentication);
+        return ResponseEntity.ok(verificationService.approve(reviewerId, id));
+    }
+
+    @PostMapping("/{id}/reject")
+    public ResponseEntity<VerificationResponse> reject(
+            @AuthenticationPrincipal UUID reviewerId,
+            Authentication authentication,
+            @PathVariable UUID id,
+            @Valid @RequestBody RejectRequest request) {
+
+        requireReviewer(authentication);
+        return ResponseEntity.ok(verificationService.reject(reviewerId, id, request.rejectionReason()));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<VerificationResponse> getDetail(
             @AuthenticationPrincipal UUID userId,
             Authentication authentication,
             @PathVariable UUID id) {
 
-        // reviewer/admin xem duoc chi tiet cac request, user chi duoc xem cua chinh usser
-        boolean canViewAny = authentication.getAuthorities().stream()
+        return ResponseEntity.ok(verificationService.getDetail(userId, id, isReviewer(authentication)));
+    }
+
+    private void requireReviewer(Authentication authentication) {
+        if (!isReviewer(authentication)) {
+            throw new CustomException(HttpStatus.FORBIDDEN, "Only reviewers or admins can perform this action!");
+        }
+    }
+
+    // reviewer/admin xem duoc chi tiet cac request, user chi duoc xem cua chinh usser
+    private boolean isReviewer(Authentication authentication) {
+        return authentication.getAuthorities().stream()
                 .anyMatch(authority -> authority.getAuthority().equals("ROLE_REVIEWER")
                         || authority.getAuthority().equals("ROLE_ADMIN"));
-
-        return ResponseEntity.ok(verificationService.getDetail(userId, id, canViewAny));
     }
 }

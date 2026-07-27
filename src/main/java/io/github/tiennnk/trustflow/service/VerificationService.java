@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,12 +46,54 @@ public class VerificationService {
                 .toList();
     }
 
+    public List<VerificationResponse> getPendingRequests() {
+        return verificationRequestRepository.findByStatusOrderByDtSubmittedAsc(VerificationStatus.PENDING)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional
+    public VerificationResponse approve(UUID reviewerId, UUID requestId) {
+        VerificationRequest request = getPendingOrThrow(requestId);
+        request.approve(reviewerId);
+        return saveReviewed(request);
+    }
+
+    @Transactional
+    public VerificationResponse reject(UUID reviewerId, UUID requestId, String reason) {
+        VerificationRequest request = getPendingOrThrow(requestId);
+        request.reject(reviewerId, reason);
+        return saveReviewed(request);
+    }
+
     public VerificationResponse getDetail(UUID userId, UUID requestId, boolean canViewAny) {
         VerificationRequest request = verificationRequestRepository.findById(requestId)
                 .orElseThrow(() -> new CustomException(HttpStatus.NOT_FOUND, "Verification request not found!"));
 
         if (!canViewAny && !request.getUserId().equals(userId)) {
             throw new CustomException(HttpStatus.FORBIDDEN, "You are not allowed to view this request!");
+        }
+
+        return toResponse(request);
+    }
+
+    private VerificationRequest getPendingOrThrow(UUID requestId) {
+        VerificationRequest request = verificationRequestRepository.findById(requestId)
+                .orElseThrow(() -> new CustomException(HttpStatus.NOT_FOUND, "Verification request not found!"));
+
+        if (request.getStatus() != VerificationStatus.PENDING) {
+            throw new CustomException(HttpStatus.CONFLICT, "This request has already been reviewed!");
+        }
+
+        return request;
+    }
+
+    private VerificationResponse saveReviewed(VerificationRequest request) {
+        try {
+            verificationRequestRepository.saveAndFlush(request);
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new CustomException(HttpStatus.CONFLICT, "This request has already been reviewed by someone else!");
         }
 
         return toResponse(request);
