@@ -44,8 +44,7 @@ class AuthControllerTest {
     @Autowired
     private UserRepository userRepository;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void cleanUp() {
@@ -119,8 +118,8 @@ class AuthControllerTest {
     }
 
     @Test
-    void getVerifications_noToken_throwsUnauthorized() throws Exception {
+    void getVerifications_noToken_throwsForbidden() throws Exception {
         mockMvc.perform(get("/verifications/me"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isForbidden());
     }
 }
