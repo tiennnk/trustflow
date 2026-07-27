@@ -28,6 +28,9 @@ class VerificationServiceTest {
     @Mock
     private VerificationRequestRepository verificationRequestRepository;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     @InjectMocks
     private VerificationService verificationService;
 

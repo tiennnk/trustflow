@@ -14,9 +14,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.github.tiennnk.trustflow.dto.AuditLogResponse;
 import io.github.tiennnk.trustflow.dto.RejectRequest;
 import io.github.tiennnk.trustflow.dto.VerificationResponse;
 import io.github.tiennnk.trustflow.exception.CustomException;
+import io.github.tiennnk.trustflow.service.AuditLogService;
 import io.github.tiennnk.trustflow.service.VerificationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,7 @@ import lombok.RequiredArgsConstructor;
 public class VerificationController {
 
     private final VerificationService verificationService;
+    private final AuditLogService auditLogService;
 
     @PostMapping
     public ResponseEntity<VerificationResponse> submit(@AuthenticationPrincipal UUID userId) {
@@ -72,6 +75,15 @@ public class VerificationController {
             @PathVariable UUID id) {
 
         return ResponseEntity.ok(verificationService.getDetail(userId, id, isReviewer(authentication)));
+    }
+
+    @GetMapping("/{id}/audit-logs")
+    public ResponseEntity<List<AuditLogResponse>> getAuditLogs(
+            Authentication authentication,
+            @PathVariable UUID id) {
+
+        requireReviewer(authentication);
+        return ResponseEntity.ok(auditLogService.getLogs(id));
     }
 
     private void requireReviewer(Authentication authentication) {
